@@ -39,9 +39,12 @@ Contents
 `BSG_ULD` solves the air cargo palletization problem with the instances of
 Paquay et al. (2018) (`instances/`): all the boxes must be loaded
 into unit load devices (ULDs) of six types (Boeing 777), minimizing the number of
-ULDs. The ULDs are loaded one by one with BSG; the next ULD is selected as in
-Hessler et al. (2025) and, at the end, the boxes of the least utilized ULD are reloaded into
-a smaller ULD when possible.
+ULDs. The ULDs are loaded one by one with BSG (all the free spaces anchored at the corner
+closest to the origin, so that the load stays grouped and can be translated to center its
+center of gravity); the next ULD is selected as in Hessler et al. (2025). Then the boxes
+left unloaded (limited ULDs) are inserted into the loaded ULDs, ULDs are eliminated by
+inserting their boxes into the others, and the boxes of the least utilized ULD are reloaded
+into a smaller ULD when possible.
 
 Constraints:
 * ULD shapes: up to four corners cut in the x-z plane (a block is moved away from
@@ -53,24 +56,28 @@ Constraints:
   the four bottom corners of each box must rest on non-fragile boxes or on the floor and
   no box can touch the top of a fragile box. With `full`, the blocks are placed on the
   floor or on blocks whose top face is complete and without fragile boxes;
-* center of gravity: at most the allowed deviation from the center in x and y. The
-  load of each ULD is translated to center its center of gravity, the evaluation of the
-  solutions is divided by 1 + p * (relative excess of the deviation), and if the deviation
-  is exceeded, the ULD is loaded again anchoring all the spaces at the origin
-  (the load is grouped and it can be centered); this is also tried when the ULD is less than
-  50% utilized and boxes remain. In the evaluation of the blocks, the VCS value is divided by
-  1 + `--cog_greedy` (default 0.5987) * the deviation of the center of gravity after placing the
-  block (and translating the load).
+* center of gravity: at most the allowed deviation from the center in x and y (and the
+  maximum height). The load of each ULD is translated to center its center of gravity, the
+  evaluation of the solutions is divided by 1 + `--cog_penalty` * (relative excess of the
+  deviation), and in the evaluation of the blocks the VCS value is divided by
+  1 + `--cog_greedy` * the deviation of the center of gravity after placing the block (and
+  translating the load).
 
-With a limited number of ULDs (`--uld_count`), the boxes that were not loaded are inserted
-into the loaded ULDs before any ULD is eliminated, by ruin and recreate: a proportion (0.3,
-0.6, 0.9) of the volume of each ULD is removed (boxes with nothing on top, from the top) and
-the ULDs are loaded again keeping the remaining boxes fixed and adding the unloaded ones.
+Insertion of boxes into the loaded ULDs (`Insert` in `main_uld.cpp`): the ULDs are visited
+from the largest to the smallest free volume and a new loading is accepted if it loads more
+volume (without leaving the center of gravity out of range if it was not); three stages:
+reload from scratch with the ULD's boxes and the pool (`--no_scratch` disables it), reload
+with priority to the boxes of the pool that fit in the ULD type (`--no_priority`) and ruin and
+recreate, removing a proportion (0.3, 0.6, 0.9) of the volume of each ULD and loading it again
+with the remaining boxes fixed (`--no_ruin`). It is used for the boxes left unloaded with a
+limited number of ULDs and to eliminate ULDs (`--no_eliminate` disables the elimination):
+the boxes of a ULD (from the least utilized) are freed and inserted into the other ULDs; the
+ULD is eliminated if all of them are inserted.
 
-After the sequential loading, the program tries to eliminate ULDs (`--no_eliminate`
-disables it): the boxes of a ULD (from the least utilized) are freed and the other ULDs
-are loaded again with their boxes and the freed ones; the boxes that are not loaded pass
-to the next ULD. The ULD is eliminated if all the freed boxes are loaded.
+Ablation: `--corner_anchor` anchors each space at its closest corner of the ULD (as in BSG for
+container loading) and loads the ULD again with the spaces anchored at the origin when the
+center of gravity is out of range (`--no_regroup` disables this reload); `--no_translate`
+disables the translation of the load; `--no_substructure` the substructure.
 
 Parameters: tuned with irace (`tuning/`) on 150 preliminary instances of Paquay
 et al. (`instances/training`, different from the final ones), 0.1 s per ULD, minimizing
@@ -139,6 +146,8 @@ range in x or y):
       --support=[string]                corners, full or none. Default: corners
       --max_bl=[int]                    Maximum number of blocks. Default: 500
       --no_eliminate                    Do not try to eliminate ULDs
+      --no_scratch, --no_priority, --no_ruin, --corner_anchor, --no_translate,
+      --no_substructure                 Ablation (see above)
       --uld=[string]                    ULD file (default: uld.csv in the parent directory of the instance)
       -o[string], --output=[string]     Write the solution to this file
       -v, --verbose                     Print the loaded ULDs
