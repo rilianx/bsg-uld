@@ -208,6 +208,9 @@ static bool check_boxes(const clpState& s, const ULD& u){
 	return true;
 }
 
+static bool none(const vector<int>& b);
+static double volume_of(const vector<int>& b);
+
 struct Params {
 	double alpha, beta, gamma, p, delta, min_fr, time;
 	int max_bl;
@@ -411,8 +414,11 @@ static bool ruin_recreate(vector<Load>& loads, vector<int>& freed, double p, con
 	return true;
 }
 
+//contadores (linea "stats" de la salida): cambios aceptados en cada etapa de insert, y
+//resultado de cada intento de la reduccion de volumen
+static long st_scratch=0, st_priority=0, st_ruin=0, su_scratch=0, su_priority=0, su_ruin=0, st_try=0, st_elim=0, st_new1=0, st_new2=0, st_fail=0, st_pass=0;
 //etapas de la insercion de cajas (ablacion)
-static bool stage_scratch=true, stage_fixed=false, stage_priority=true, stage_ruin=true;
+static bool stage_scratch=true, stage_priority=true, stage_ruin=true;
 
 static double volume_of(const vector<int>& b){
 	double v=0;
@@ -463,15 +469,7 @@ static void insert(vector<Load>& loads, vector<int>& pool, const Params& P){
 			if(none(pool)) return;
 			vector<int> avail=with_pool(loads[i]);
 			Load ld=load(*loads[i].uld, avail, P);
-			if(improves(loads[i], ld)) take(i, ld, avail);
-		}
-
-	if(stage_fixed)
-		for(int i : by_free_volume(loads)){
-			if(none(pool)) return;
-			vector<int> avail=with_pool(loads[i]);
-			Load ld=load_more(loads[i], pool, P);
-			if(improves(loads[i], ld)) take(i, ld, avail);
+			if(improves(loads[i], ld)){ take(i, ld, avail); st_scratch++; }
 		}
 
 	if(stage_priority)
@@ -488,20 +486,98 @@ static void insert(vector<Load>& loads, vector<int>& pool, const Params& P){
 			for(size_t t=0; t<rest.size(); t++) rest[t]-=ld2.boxes[t];
 			Load ld3=load_more(ld2, rest, P);
 			const Load& ld=(ld3.feasible && ld3.volume>=ld2.volume)? ld3 : ld2;
-			if(improves(loads[i], ld)) take(i, ld, avail);
+			if(improves(loads[i], ld)){ take(i, ld, avail); st_priority++; }
 		}
 
 	if(stage_ruin)
 		for(bool progress=true; progress && !none(pool); ){
 			progress=false;
 			for(double p : {0.3, 0.6, 0.9})
-				if(!none(pool) && ruin_recreate(loads, pool, p, P)) progress=true;
+				if(!none(pool) && ruin_recreate(loads, pool, p, P)){ progress=true; st_ruin++; }
 		}
 }
 
 /**
- * Intenta eliminar un ULD (de menor a mayor utilizacion): se liberan sus cajas y se insertan
- * en los otros ULDs (ver insert). Retorna true si se elimino alguno.
+ * Reduccion del volumen de los ULDs: se saca un ULD (de mayor a menor volumen perdido), sus
+ * cajas se insertan en los otros ULDs (ver insert) y, si sobran, se cargan en 1 a reduce_new
+ * ULDs nuevos de menor volumen total que el sacado (sin dejar el CoG fuera de rango si no lo
+ * estaba). Generaliza la eliminacion de ULDs (no sobran cajas) y el cambio a ULDs mas pequenos.
+ * Retorna true si se hizo un cambio (que siempre reduce el volumen total de los ULDs).
+ */
+static int reduce_new=2;
+static bool reduce_volume(vector<Load>& loads, const Params& P){
+	vector<int> order(loads.size());
+	for(size_t i=0; i<order.size(); i++) order[i]=i;
+	auto waste=[&](int i){ return loads[i].uld->volume - loads[i].volume; };
+	sort(order.begin(), order.end(), [&](int a, int b){ return waste(a) > waste(b); });
+	st_pass++;
+	for(int target : order){
+		const Load& tg=loads[target];
+		st_try++;
+		vector<int> pool=tg.boxes;
+		vector<Load> others;
+		for(size_t i=0; i<loads.size(); i++) if((int)i!=target) others.push_back(loads[i]);
+		long s0=st_scratch, s1=st_priority, s2=st_ruin;
+		if(!others.empty()) insert(others, pool, P);
+		//etapas de insert que aportaron a un cambio aceptado
+		auto useful=[&](){ su_scratch+=st_scratch-s0; su_priority+=st_priority-s1; su_ruin+=st_ruin-s2; };
+		if(none(pool)){ loads=others; st_elim++; useful(); return true; }
+		//sobrante: 1 a reduce_new ULDs nuevos de menor volumen total que el sacado, de menor a
+		//mayor volumen total (el mas grande se carga primero, con todo el sobrante)
+		double pv=volume_of(pool), pw=0;
+		for(size_t t=0; t<pool.size(); t++) pw += pool[t]*clpState::types[t]->weight;
+		int kt=uld_index(*tg.uld);
+		vector<int> av=available;
+		if(av[kt]>=0) av[kt]++;
+		vector< vector<int> > combos;
+		for(size_t a=0; a<ulds.size(); a++){
+			combos.push_back({(int)a});
+			if(reduce_new>=2)
+				for(size_t b=0; b<ulds.size(); b++)
+					if(ulds[b].volume < ulds[a].volume || (ulds[b].volume == ulds[a].volume && b>=a)) combos.push_back({(int)a, (int)b});
+		}
+		auto cvol=[&](const vector<int>& C){ double v=0; for(int k : C) v+=ulds[k].volume; return v; };
+		sort(combos.begin(), combos.end(), [&](const vector<int>& x, const vector<int>& y){ return cvol(x) < cvol(y); });
+		for(const vector<int>& C : combos){
+			double vc=cvol(C), wc=0;
+			if(vc >= tg.uld->volume - 1e-6) break;
+			if(vc < pv) continue;
+			vector<int> a2=av; bool ok=true;
+			for(int k : C){ wc+=ulds[k].max_weight; if(a2[k]==0) ok=false; else if(a2[k]>0) a2[k]--; }
+			if(!ok || wc < pw) continue;
+			for(size_t t=0; t<pool.size() && ok; t++){
+				if(!pool[t]) continue;
+				bool any=false;
+				for(int k : C) any = any || fits(*clpState::types[t], ulds[k]);
+				ok=any;
+			}
+			if(!ok) continue;
+			vector<Load> nl; vector<int> rest=pool;
+			for(int k : C){
+				if(none(rest)) break;
+				Load ld=load(ulds[k], rest, P);
+				if(!ld.feasible || none(ld.boxes) || (tg.cog_ok() && !ld.cog_ok())){ ok=false; break; }
+				for(size_t t=0; t<rest.size(); t++) rest[t]-=ld.boxes[t];
+				nl.push_back(ld);
+			}
+			if(!ok || !none(rest)) continue;
+			//ULDs de C no usados (el primero ya cargo todo)
+			for(size_t i=nl.size(); i<C.size(); i++) if(a2[C[i]]>=0) a2[C[i]]++;
+			available=a2;
+			for(const Load& ld : nl) others.push_back(ld);
+			loads=others;
+			if(nl.size()==1) st_new1++; else st_new2++;
+			useful();
+			return true;
+		}
+		st_fail++;
+	}
+	return false;
+}
+
+/**
+ * Ablacion (--eliminate_only): solo eliminacion de ULDs; se sacan los ULDs (de menor a mayor
+ * utilizacion) y sus cajas se insertan en los otros. Retorna true si se elimino alguno.
  */
 static bool eliminate_uld(vector<Load>& loads, const Params& P){
 	if(loads.size()<2) return false;
@@ -546,11 +622,12 @@ int main(int argc, char** argv){
 	args::Flag _no_regroup(parser, "no_regroup", "Ablation (with --corner_anchor): do not load again a ULD anchoring the spaces at the origin", {"no_regroup"});
 	args::Flag _no_substructure(parser, "no_substructure", "Ablation: do not use a substructure", {"no_substructure"});
 	args::Flag _no_scratch(parser, "no_scratch", "Ablation: insertion of boxes without the reload from scratch", {"no_scratch"});
-	args::Flag _fixed(parser, "fixed", "Ablation: insertion of boxes with a reload with fixed boxes", {"fixed"});
 
 	args::Flag _no_priority(parser, "no_priority", "Ablation: insertion of boxes without the reload with priority", {"no_priority"});
 	args::Flag _no_ruin(parser, "no_ruin", "Ablation: insertion of boxes without ruin and recreate", {"no_ruin"});
-	args::Flag _no_eliminate(parser, "no_eliminate", "Do not try to eliminate ULDs by distributing their boxes into the other ULDs", {"no_eliminate"});
+	args::ValueFlag<int> _reduce_new(parser, "int", "Reduction of the volume: maximum number of new ULDs for the boxes that are not inserted into the other ULDs (1 or 2). Default: 2", {"reduce_new"});
+	args::Flag _eliminate_only(parser, "eliminate_only", "Ablation: instead of the reduction of the volume, only eliminate ULDs by inserting their boxes into the others", {"eliminate_only"});
+	args::Flag _no_eliminate(parser, "no_eliminate", "Ablation: no reduction of the volume (nor elimination of ULDs)", {"no_eliminate"});
 	args::ValueFlag<string> _output(parser, "string", "Write the solution to this file (one line per box: ULD, ULD type, substructure, item (line of the instance file, from 0), x, y, z, length, width, height)", {'o', "output"});
 	args::Flag _verbose(parser, "verbose", "Print the loaded ULDs", {'v', "verbose"});
 	args::Positional<std::string> _file(parser, "instance", "Instance file (format of Paquay et al.)");
@@ -615,6 +692,7 @@ int main(int argc, char** argv){
 	}
 	use_substructure = !_no_substructure && clpState::corner_support && ulds[0].edge>0 && ulds[0].delta>0;
 	regroup = !_no_regroup;
+	if(_reduce_new) reduce_new=_reduce_new.Get();
 	origin_only = !_corner_anchor;
 	Space::origin_anchor = origin_only;
 	clpState::translate_cog = !_no_translate;
@@ -676,35 +754,16 @@ int main(int argc, char** argv){
 		if(available[uld_index(*u)]>0) available[uld_index(*u)]--;
 	}
 
-	stage_scratch=!_no_scratch; stage_fixed=_fixed; stage_priority=!_no_priority; stage_ruin=!_no_ruin;
+	stage_scratch=!_no_scratch; stage_priority=!_no_priority; stage_ruin=!_no_ruin;
 
 	//cajas no cargadas (ULDs limitados): se insertan en los ULDs cargados
 	if(remaining()>0) insert(loads, left, P);
 
-	//si se cargaron todas las cajas, se eliminan ULDs insertando sus cajas en los otros
-	if(!_no_eliminate && remaining()==0)
-		while(eliminate_uld(loads, P));
-
-	//se intenta recargar las cajas del ULD menos utilizado en el ULD mas pequeno posible
-	Load& worst = *min_element(loads.begin(), loads.end(),
-			[](const Load& a, const Load& b){ return a.utilization() < b.utilization(); });
-	vector<const ULD*> smaller;
-	for(size_t i=0; i<ulds.size(); i++)
-		if(ulds[i].volume < worst.uld->volume && available[i]!=0) smaller.push_back(&ulds[i]);
-	sort(smaller.begin(), smaller.end(), [](const ULD* a, const ULD* b){ return a->volume < b->volume; });
-	for(const ULD* u : smaller){
-		const vector<int>& boxes=worst.boxes;
-		bool all_fit=true;
-		for(size_t t=0; t<boxes.size(); t++)
-			if(boxes[t]>0 && !fits(*clpState::types[t], *u)) all_fit=false;
-		if(!all_fit) continue;
-		Load ld = load(*u, boxes, P);
-		if(ld.boxes==boxes && (ld.cog_ok() || !worst.cog_ok())){
-			if(available[uld_index(*u)]>0) available[uld_index(*u)]--;
-			if(available[uld_index(*worst.uld)]>=0) available[uld_index(*worst.uld)]++;
-			worst=ld;
-			break;
-		}
+	//reduccion del volumen de los ULDs (con --eliminate_only, solo eliminacion de ULDs, y solo
+	//si se cargaron todas las cajas)
+	if(!_no_eliminate){
+		if(_eliminate_only){ if(remaining()==0) while(eliminate_uld(loads, P)); }
+		else while(reduce_volume(loads, P));
 	}
 
 	double time=double(clock()-begin_time)/double(CLOCKS_PER_SEC);
@@ -741,6 +800,11 @@ int main(int argc, char** argv){
 	cout << "n_ulds " << loads.size() << " median_util " << median
 		<< " total_util " << 100*total_vol/total_uld_vol << " cost " << cost
 		<< " cog_violations " << cog_viol << " unloaded " << unloaded << " time " << time << endl;
+
+	cout << "stats scratch " << st_scratch << " priority " << st_priority << " ruin " << st_ruin
+		<< " useful_scratch " << su_scratch << " useful_priority " << su_priority << " useful_ruin " << su_ruin
+		<< " passes " << st_pass << " tries " << st_try << " elim " << st_elim << " new1 " << st_new1
+		<< " new2 " << st_new2 << " fail " << st_fail << endl;
 
 	if(_output){
 		ofstream out(_output.Get().c_str());

@@ -42,9 +42,10 @@ into unit load devices (ULDs) of six types (Boeing 777), minimizing the number o
 ULDs. The ULDs are loaded one by one with BSG (all the free spaces anchored at the corner
 closest to the origin, so that the load stays grouped and can be translated to center its
 center of gravity); the next ULD is selected as in Hessler et al. (2025). Then the boxes
-left unloaded (limited ULDs) are inserted into the loaded ULDs, ULDs are eliminated by
-inserting their boxes into the others, and the boxes of the least utilized ULD are reloaded
-into a smaller ULD when possible.
+left unloaded (limited ULDs) are inserted into the loaded ULDs, and the total volume of the
+ULDs (the objective of Paquay et al. and Hessler et al.) is reduced: a ULD is removed, its
+boxes are inserted into the other ULDs and the remaining ones are loaded into 1 or 2 new ULDs
+of smaller total volume.
 
 Constraints:
 * ULD shapes: up to four corners cut in the x-z plane (a block is moved away from
@@ -63,16 +64,22 @@ Constraints:
   1 + `--cog_greedy` * the deviation of the center of gravity after placing the block (and
   translating the load).
 
-Insertion of boxes into the loaded ULDs (`Insert` in `main_uld.cpp`): the ULDs are visited
+Insertion of boxes into the loaded ULDs (`insert` in `main_uld.cpp`): the ULDs are visited
 from the largest to the smallest free volume and a new loading is accepted if it loads more
 volume (without leaving the center of gravity out of range if it was not); three stages:
 reload from scratch with the ULD's boxes and the pool (`--no_scratch` disables it), reload
 with priority to the boxes of the pool that fit in the ULD type (`--no_priority`) and ruin and
 recreate, removing a proportion (0.3, 0.6, 0.9) of the volume of each ULD and loading it again
-with the remaining boxes fixed (`--no_ruin`). It is used for the boxes left unloaded with a
-limited number of ULDs and to eliminate ULDs (`--no_eliminate` disables the elimination):
-the boxes of a ULD (from the least utilized) are freed and inserted into the other ULDs; the
-ULD is eliminated if all of them are inserted.
+with the remaining boxes fixed (`--no_ruin`).
+
+Reduction of the volume (`reduce_volume`): the ULDs are visited from the largest to the
+smallest lost volume (ULD volume - loaded volume); the boxes of the ULD are inserted into the
+other ULDs and, if some remain, they are loaded into 1 or 2 new ULDs (`--reduce_new`) whose
+total volume is smaller than the volume of the removed ULD, trying the combinations from the
+smallest total volume. The first change found is accepted (every change reduces the total
+volume, and a ULD is eliminated when all its boxes are inserted) and the procedure is repeated
+until no ULD can be changed. `--eliminate_only` only eliminates ULDs (no new ULDs);
+`--no_eliminate` disables the reduction.
 
 Ablation: `--corner_anchor` anchors each space at its closest corner of the ULD (as in BSG for
 container loading) and loads the ULD again with the spaces anchored at the origin when the
