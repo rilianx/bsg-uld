@@ -41,7 +41,9 @@ Paquay et al. (2018) (`instances/`): all the boxes must be loaded
 into unit load devices (ULDs) of six types (Boeing 777), minimizing the number of
 ULDs. The ULDs are loaded one by one with BSG (all the free spaces anchored at the corner
 closest to the origin, so that the load stays grouped and can be translated to center its
-center of gravity); the next ULD is selected as in Hessler et al. (2025). Then the boxes
+center of gravity); the next ULD type is chosen among the candidates of the rule of Hessler et al. (2025) by
+loading each one and maximizing loaded volume - theta * ULD volume (`--theta`, default 0.1;
+negative: the rule of Hessler et al. alone). Then the boxes
 left unloaded (limited ULDs) are inserted into the loaded ULDs, and the total volume of the
 ULDs (the objective of Paquay et al. and Hessler et al.) is reduced: a ULD is removed, its
 boxes are inserted into the other ULDs and the remaining ones are loaded into 1 or 2 new ULDs
@@ -90,7 +92,9 @@ Parameters: tuned with irace (`tuning/`) on 150 preliminary instances of Paquay
 et al. (`instances/training`, different from the final ones), 0.1 s per ULD, minimizing
 the number of ULDs + 5 * the ULDs with the center of gravity out of range:
 cog_penalty=12.6619, cog_greedy=0.5987, max_bl=500 and the VCS parameters alpha=1.2335,
-beta=0.2389, gamma=0.2243, p=0.0574.
+beta=0.2389, gamma=0.2243, p=0.0574. theta=0.1 was chosen afterwards with the other
+parameters fixed, among {0.1, 0.2, 0.3, 0.6} and the rule of Hessler et al. alone, on
+the training instances of the three settings (0.1 s per ULD).
 
 The solutions are verified box by box. With `-o file` the solution is written (one line
 per box: ULD, ULD type, item (line of the instance file, from 0), position and dimensions)
