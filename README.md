@@ -159,6 +159,8 @@ in x or y; with one ULD of each type also the volume not loaded):
 
       -t[double]                        Timelimit of the search in each ULD
                                         (seconds, without the block generation). Default: 1
+      --improve_time=[double]           Time of BSG in the insertion and reduction phases,
+                                        relative to -t. Default: 0.1
       --cog_penalty=[double]            Penalty of the deviation of the center of gravity. Default: 1.4035
       --support=[string]                corners, full or none. Default: corners
       --max_bl=[int]                    Maximum number of blocks. Default: 500
