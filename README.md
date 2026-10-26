@@ -42,9 +42,12 @@ into unit load devices (ULDs) of six types (Boeing 777), minimizing the number o
 ULDs. The ULDs are loaded one by one with BSG (all the free spaces anchored at the corner
 closest to the origin, so that the load stays grouped and can be translated to center its
 center of gravity); the next ULD type is chosen among the candidates of the rule of Hessler et al. (2025) by
-loading each one and maximizing loaded volume - theta * ULD volume (`--theta`, default 0.0744;
+loading each one and maximizing loaded volume - theta * ULD volume (`--theta`, default 0.2316;
 negative: the rule of Hessler et al. alone). Then the boxes
-left unloaded (limited ULDs) are inserted into the loaded ULDs, and the total volume of the
+left unloaded (limited ULDs) are inserted into the loaded ULDs; if some are still left out, the
+construction is restarted (at most `--restarts` times, default 3) loading those boxes first in
+the first ULD in which they fit, and the solution with the least unloaded volume is kept. Then
+the total volume of the
 ULDs (the objective of Paquay et al. and Hessler et al.) is reduced: a ULD is removed, its
 boxes are inserted into the other ULDs and the remaining ones are loaded into 1 or 2 new ULDs
 of smaller total volume.
@@ -62,9 +65,8 @@ Constraints:
 * center of gravity: at most the allowed deviation from the center in x and y (and the
   maximum height). The load of each ULD is translated to center its center of gravity, the
   evaluation of the solutions is divided by 1 + `--cog_penalty` * (relative excess of the
-  deviation), and in the evaluation of the blocks the VCS value is divided by
-  1 + `--cog_greedy` * the deviation of the center of gravity after placing the block (and
-  translating the load).
+  deviation). (Ablation: `--cog_greedy mu` also divides the VCS value of each block by
+  1 + mu * the deviation of the center of gravity after placing it; not used by default.)
 
 Insertion of boxes into the loaded ULDs (`insert` in `main_uld.cpp`): the ULDs are visited
 from the largest to the smallest free volume and a new loading is accepted if it loads more
@@ -90,10 +92,11 @@ disables the translation of the load; `--no_substructure` the substructure.
 
 Parameters: tuned with irace (`tuning/`, result in `tuning/best.txt`) on 150 preliminary
 instances of Paquay et al. (`instances/training`, different from the final ones), each one in
-the three settings, 0.1 s per ULD and at most 500 blocks (fixed), 6000 runs, minimizing (volume of the ULDs + 100 * volume
+the three settings, 0.1 s per ULD and at most 500 blocks (fixed), 6000 runs, minimizing
+(volume of the ULDs + 100 * volume
 left unloaded + 150 m3 * ULDs with the center of gravity out of range) / volume of the boxes:
-cog_penalty=4.0423, cog_greedy=0.4762, theta=0.0744 and the VCS parameters alpha=0.1122,
-beta=2.803, gamma=0.4563, p=0.0902 (max_bl=500).
+cog_penalty=1.4035, theta=0.2316 and the VCS parameters alpha=0.5139, beta=4.7497,
+gamma=0.7727, p=0.088 (max_bl=500).
 
 The solutions are verified box by box. With `-o file` the solution is written (one line
 per box: ULD, ULD type, item (line of the instance file, from 0), position and dimensions)
@@ -152,10 +155,10 @@ range in x or y):
 
       -t[double]                        Timelimit of the search in each ULD
                                         (seconds, without the block generation). Default: 1
-      --cog_penalty=[double]            Penalty of the deviation of the center of gravity. Default: 4.0423
+      --cog_penalty=[double]            Penalty of the deviation of the center of gravity. Default: 1.4035
       --support=[string]                corners, full or none. Default: corners
       --max_bl=[int]                    Maximum number of blocks. Default: 500
-      --theta=[double]                  Choice of the ULD type (negative: rule of Hessler et al.). Default: 0.0744
+      --theta=[double]                  Choice of the ULD type (negative: rule of Hessler et al.). Default: 0.2316
       --no_eliminate                    Do not reduce the volume of the ULDs
       --no_scratch, --no_priority, --no_ruin, --corner_anchor, --no_translate,
       --no_substructure                 Ablation (see above)
