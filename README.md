@@ -34,7 +34,7 @@ Contents
   computational experiments (`run_all.sh`, `run_uld.sh`, `summarize.py`, `collect.py`,
   `size_tables.py`).
 * `tuning/`: irace scenario.
-* `results/server/`: results of the experiments of the paper (all the runs in `runs.tar.gz`).
+* `results/final/`: results of the experiments of the paper (all the runs in `runs.tar.gz`, summary in `summary.txt`, machine in `environment.txt`).
 
 `BSG_ULD` solves the air cargo palletization problem with the instances of
 Paquay et al. (2018) (`instances/`): all the boxes must be loaded
@@ -106,49 +106,53 @@ and it can be checked with an independent validator:
 
 Results on the 300 final instances of Paquay et al. (2018) (30 per size, 10 to 100 boxes),
 5 runs per configuration (mean ± standard deviation), all the solutions validated with
-`validate_uld.py`, scripts in `scripts/` (`run_uld.sh`, `summarize.py`).
-Comparison instance by instance with Hessler et al. (2025) (`hessler/hessler2024_table*.json`):
-better means more boxes loaded or, with the same boxes, fewer ULDs.
+`validate_uld.py` (`scripts/run_all.sh`, statistics with `scripts/paper_stats.py`; runs in
+`results/final/runs.tar.gz`, summary in `results/final/summary.txt`). Comparison instance by
+instance with the RGS of Hessler et al. (2025) (`hessler/`), with their objective: total volume
+of the ULDs (with one ULD of each type, first the loaded volume).
 
-* paquay: instances of Paquay et al. (Hessler et al.: 708 ULDs, 11.2% of the ULDs with the
-  CoG out of range; Paquay et al. 2018: 1010 ULDs);
+* paquay: instances of Paquay et al., CoG deviation 5% of the half dimensions as in Hessler et
+  al. (RGS: 18648 m3, 708 ULDs, 11.2% of the ULDs with the CoG out of range);
 * adapted: edge of 10 mm with vertical offset 10 mm (substructure allowed), support by area
-  (min overlap 0.9, padding 10 mm), CoG deviation 10% of the half dimensions (Hessler et al.:
+  (min overlap 0.9, padding 10 mm), CoG deviation 10% of the half dimensions (RGS: 16843 m3,
   653 ULDs);
-* one: adapted with one ULD of each type (Hessler et al.: 729 ULDs, 24 boxes not loaded).
+* one: adapted with one ULD of each type (RGS: 16166 m3, 729 ULDs, 24 boxes / 25.9 m3 not
+  loaded).
 
-CoG xy: ULDs with the CoG out of the allowed deviation in x or y; CoG z: CoG above the maximum
-height (Paquay et al. 2016, not considered by Hessler et al.).
+| instances | -t (per ULD) | volume (m3) | vs RGS | better / worse | ULDs | not loaded (m3) | CoG xy | CoG z | avg time |
+|---|---|---|---|---|---|---|---|---|---|
+| paquay  | 0.1 s | 17804 ± 34 | -4.5% | 160 / 74 | 720.2 | 0 | 7.2 | 0 | 3.7 s |
+| paquay  | 1 s   | 17309 ± 15 | -7.2% | 178.2 / 60.8 | 695.2 | 0 | 5 | 1 | 28.1 s |
+| adapted | 0.1 s | 16240 ± 17 | -3.6% | 151.4 / 77.6 | 680.0 | 0 | 1.2 | 1 | 4.9 s |
+| adapted | 1 s   | 15770 ± 13 | -6.4% | 168.6 / 62.2 | 639.0 | 0 | 2 | 1 | 35.3 s |
+| one     | 0.1 s | 15396 ± 10 | -4.8% | 154.6 / 41.4 | 760.6 | 12 (10.4) | 10.8 | 3 | 5.8 s |
+| one     | 1 s   | 14866 ± 6  | -8.0% | 176.4 / 27 | 709.4 | 9 (9.0) | 7.2 | 5 | 44.0 s |
 
-| instances | -t (per ULD) | ULDs | boxes not loaded | better / worse | CoG xy | CoG z | avg time |
-|---|---|---|---|---|---|---|---|
-| paquay  | 0.1 s | 617.0 ± 0.0 | 0 | 91.0 / 0 | 0 | 0 | 0.62 s |
-| paquay  | 1 s   | 597.8 ± 0.4 | 0 | 111.2 / 1 | 1 | 0 | 5.4 s |
-| adapted | 0.1 s | 598.0 ± 0.0 | 0 | 56.0 / 1 | 2 | 0 | 1.2 s |
-| adapted | 1 s   | 576.0 ± 0.0 | 0 | 77.0 / 0 | 1 | 0 | 10.3 s |
-| one     | 0.1 s | 706.0 ± 0.0 | 22.0 ± 0.0 | 42.0 / 22.0 | 3 | 0 | 1.6 s |
-| one     | 1 s   | 675.8 ± 0.4 | 21.0 ± 0.0 | 64.4 / 20.2 | 2 | 1 | 13.0 s |
+Machine: two Intel Xeon E5-2620 v4 (2.1 GHz, 8 cores each), 14 runs in parallel.
 
-Machine: two Intel Xeon E5-2620 v4 (2.1 GHz, 8 cores each), 14 runs in parallel
-(`scripts/run_all.sh`; results in `results/server`).
+Lower bound on the number of ULDs (`lower_bound_uld.py`): reached in 106 of the 300 paquay
+instances with 1 s (RGS: 80).
 
-Lower bound (`lower_bound_uld.py`: total volume / largest ULD, total weight / largest capacity,
-cliques of incompatible boxes): the number of ULDs is proven optimal in 140 (0.1 s) and 157
-(1 s) of the 300 paquay instances (Hessler et al.: 80).
+Ablation (0.1 s per ULD, one run; volume of the ULDs vs RGS and ULDs with the CoG out of range
+in x or y; with one ULD of each type also the volume not loaded):
 
-Ablation (0.1 s per ULD, one run, one component turned off; ULDs and ULDs with the CoG out of
-range in x or y):
-
-| without | paquay | adapted | one (ULDs, boxes not loaded) |
+| variant | paquay | adapted | one |
 |---|---|---|---|
-| (complete algorithm) | 617 / 0 | 598 / 2 | 706, 22 |
-| CoG in the evaluation of the blocks (`--cog_greedy 0`) | 625 / 2 | 607 / 6 | 713, 29 |
-| CoG penalty in the value (`--cog_penalty 0`) | 615 / 193 | 590 / 296 | 679, 17 (353 CoG) |
-| translation of the load (`--no_translate`) | 624 / 84 | 602 / 84 | 723, 28 (158 CoG) |
-| grouped reload (`--no_regroup`) | 622 / 25 | 604 / 31 | 726, 39 |
-| elimination of ULDs (`--no_eliminate`) | 620 / 0 | 599 / 2 | 719, 22 |
-| substructure (`--no_substructure`) | - | 618 / 1 | 731, 28 |
-| all the previous except the CoG penalty and the translation | 630 / 26 | 634 / 61 | 804, 39 |
+| complete algorithm (mean of 5 runs) | -4.5% / 7.2 | -3.6% / 1.2 | -4.8% / 10.8, 10.4 m3 |
+| no CoG penalty (`--cog_penalty 0`) | -6.4% / 446 | -3.0% / 285 | -3.3% / 300, 8.8 m3 |
+| no translation (`--no_translate`) | -1.5% / 171 | -1.6% / 119 | -3.9% / 178, 15.2 m3 |
+| CoG in the block evaluation (`--cog_greedy 0.5`) | -3.4% / 8 | -3.7% / 4 | -5.2% / 6, 9.7 m3 |
+| spaces at the nearest corner (`--corner_anchor`) | -4.9% / 7 | -2.3% / 3 | -4.3% / 6, 9.8 m3 |
+| no substructure (`--no_substructure`) | - | -3.2% / 7 | -3.9% / 13, 14.7 m3 |
+| rule of Hessler et al. (`--theta -1`) | -3.5% / 6 | -3.4% / 4 | -3.7% / 11, 11.9 m3 |
+| no restarts (`--restarts 0`) | - | - | -4.9% / 12, 19.8 m3 |
+| insert without reload from scratch (`--no_scratch`) | -3.7% / 9 | -3.0% / 3 | -4.0% / 15, 13.8 m3 |
+| insert without priority reload (`--no_priority`) | -3.2% / 8 | -3.0% / 0 | -4.3% / 13, 11.1 m3 |
+| insert without ruin and recreate (`--no_ruin`) | -4.0% / 8 | -3.0% / 1 | -4.1% / 13, 10.6 m3 |
+| reduction with one new ULD (`--reduce_new 1`) | -4.0% / 6 | -3.0% / 0 | -4.4% / 11, 10.3 m3 |
+| only elimination of ULDs (`--eliminate_only`) | -1.3% / 9 | -0.4% / 3 | -3.7% / 13, 10.3 m3 |
+| no reduction (`--no_eliminate`) | +0.6% / 10 | +0.8% / 3 | -1.7% / 17, 10.3 m3 |
+| basic BSG (all of the above off) | +13.7% / 90 | +18.5% / 60 | +10.1% / 74, 26.9 m3 |
 
 ```
 ./BSG_ULD {OPTIONS} [instance]
