@@ -68,13 +68,12 @@ Constraints:
   deviation). (Ablation: `--cog_greedy mu` also divides the VCS value of each block by
   1 + mu * the deviation of the center of gravity after placing it; not used by default.)
 
-Insertion of boxes into the loaded ULDs (`insert` in `main_uld.cpp`): the ULDs are visited
-from the largest to the smallest free volume and a new loading is accepted if it loads more
-volume (without leaving the center of gravity out of range if it was not); three stages:
-reload from scratch with the ULD's boxes and the pool (`--no_scratch` disables it), reload
-with priority to the boxes of the pool that fit in the ULD type (`--no_priority`) and ruin and
-recreate, removing a proportion (0.3, 0.6, 0.9) of the volume of each ULD and loading it again
-with the remaining boxes fixed (`--no_ruin`).
+Insertion of boxes into the loaded ULDs (`insert` in `main_uld.cpp`): ruin and recreate,
+once with each proportion 0.3, 0.6 and 0.9: that proportion of the loaded volume of each ULD is
+removed (top boxes first) and the ULDs are completed with the removed boxes and the pool, keeping
+the remaining boxes fixed; accepted if the volume of the pool decreases (`--no_ruin` disables
+it). Ablation: `--scratch` and `--priority` add a reload of each ULD from scratch and a reload
+with priority to the boxes of the pool.
 
 Reduction of the volume (`reduce_volume`): the ULDs are visited from the largest to the
 smallest lost volume (ULD volume - loaded volume); the boxes of the ULD are inserted into the
@@ -103,6 +102,9 @@ per box: ULD, ULD type, item (line of the instance file, from 0), position and d
 and it can be checked with an independent validator:
 
      python3 scripts/validate_uld.py <instance.csv> instances/uld.csv <solution> [--support corners|full|none]
+
+(The tables below are from the previous version of the algorithm, with the improvement phases
+at t and three stages in the insertion; they will be updated with the next campaign.)
 
 Results on the 300 final instances of Paquay et al. (2018) (30 per size, 10 to 100 boxes),
 5 runs per configuration (mean ± standard deviation), all the solutions validated with
@@ -166,7 +168,7 @@ in x or y; with one ULD of each type also the volume not loaded):
       --max_bl=[int]                    Maximum number of blocks. Default: 500
       --theta=[double]                  Choice of the ULD type (negative: rule of Hessler et al.). Default: 0.2316
       --no_eliminate                    Do not reduce the volume of the ULDs
-      --no_scratch, --no_priority, --no_ruin, --corner_anchor, --no_translate,
+      --scratch, --priority, --no_ruin, --corner_anchor, --no_translate,
       --no_substructure                 Ablation (see above)
       --uld=[string]                    ULD file (default: uld.csv in the parent directory of the instance)
       -o[string], --output=[string]     Write the solution to this file
