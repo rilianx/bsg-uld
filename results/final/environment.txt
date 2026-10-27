@@ -1,5 +1,5 @@
-fecha: Mon Oct 26 11:03:13 AM UTC 2026
-commit: d3d600e8ef29a6e48ed814aebb7bdef37bf7bfb3
+fecha: Mon Oct 26 11:02:25 PM UTC 2026
+commit: 227d6fa8fc9a61067c037b16be3a1c293d97b3f0
 procesos en paralelo: 14
 Architecture:                            x86_64
 CPU op-mode(s):                          32-bit, 64-bit
@@ -15,7 +15,7 @@ Thread(s) per core:                      1
 Core(s) per socket:                      8
 Socket(s):                               2
 Stepping:                                1
-CPU(s) scaling MHz:                      54%
+CPU(s) scaling MHz:                      56%
 CPU max MHz:                             3000.0000
 CPU min MHz:                             1200.0000
 BogoMIPS:                                4199.91
