@@ -83,6 +83,9 @@ static vector<int> read_items(const string& file){
  * la caja cabe sola en el ULD u: sobre el piso dentro del borde o, si el ULD tiene borde,
  * sobre la subestructura (apoyada en ella al menos en min_overlap de su base)
  */
+//uso de la subestructura (con borde; --no_substructure la desactiva)
+static bool use_substructure=false;
+
 static bool fits(const BoxShape& box, const ULD& u){
 	if(box.weight > u.max_weight) return false;
 	long e=u.edge;
@@ -93,7 +96,8 @@ static bool fits(const BoxShape& box, const ULD& u){
 			long x=e, z=0;
 			if(u.adjust(x, z, l, h, e, u.L-e-l, 0, u.H-h, !clpState::support)) return true;
 		}
-		if(e>0 && l<=u.L && w<=u.W && h<=u.H-u.delta){
+		//sobre la subestructura (si se usa), por encima del borde
+		if(e>0 && use_substructure && l<=u.L && w<=u.W && h<=u.H-u.delta){
 			long x=(u.L-l)/2, z=u.delta;
 			if(!u.adjust(x, z, l, h, 0, u.L-l, u.delta, u.H-h, false)) continue;
 			long y=(u.W-w)/2;
@@ -107,7 +111,6 @@ static bool fits(const BoxShape& box, const ULD& u){
 //ULDs (sin y con subestructura) y cantidad disponible de cada tipo (-1: ilimitada)
 static vector<ULD> ulds, ulds_sub;
 static vector<int> available;
-static bool use_substructure=false;
 //todos los espacios anclados en el origen (la carga queda agrupada y se puede centrar)
 static bool origin_only=true;
 //ablacion (con --corner_anchor): recarga con los espacios anclados en el origen (ver load_cog)
@@ -224,6 +227,9 @@ struct Params {
 	bool fix_knapsack;
 };
 
+//tiempo (s de CPU) de la generacion de bloques y de la busqueda, y cantidad de cargas con BSG
+static double tm_gen=0, tm_search=0; static long n_bsg=0;
+
 /** carga el ULD u con las cajas left usando BSG (P.time segundos de busqueda) */
 static Load load_bsg(const ULD& u, const vector<int>& left, const Params& P,
 		const vector<Block::PlacedBox>* fixed=NULL, bool center=true){
@@ -235,7 +241,9 @@ static Load load_bsg(const ULD& u, const vector<int>& left, const Params& P,
 	res.feasible=true;
 	res.value=0.0;
 
+	clock_t g0=clock();
 	clpState* s0 = new_state(u, left, P.min_fr, P.max_bl);
+	tm_gen+=double(clock()-g0)/CLOCKS_PER_SEC; n_bsg++;
 	if(s0->get_n_valid_blocks()==0){ delete s0; return res; }
 
 	//cajas fijas: se ubican como bloques de una caja antes de la busqueda
@@ -256,6 +264,10 @@ static Load load_bsg(const ULD& u, const vector<int>& left, const Params& P,
 	Greedy* gr = new Greedy(vcs);
 	BSG* bsg = new BSG(vcs, *gr, 4);
 	DoubleEffort* de = new DoubleEffort(*bsg);
+	//la busqueda termina si se cargan todas las cajas con el CoG en rango (no se puede mejorar)
+	double vleft=0;
+	for(size_t t=0; t<left.size(); t++) vleft += (double) left[t]*clpState::types[t]->getVolume();
+	de->set_target(vleft/((double) u.L*u.W*u.H));
 
 	//el tiempo limite es para la busqueda (sin la generacion de bloques)
 	clock_t begin_time=clock();
@@ -265,6 +277,7 @@ static Load load_bsg(const ULD& u, const vector<int>& left, const Params& P,
 	State* s_copy = s0->clone();
 	de->run(*s_copy, P.time, begin_time);
 	cout.rdbuf(buf);
+	tm_search+=double(clock()-begin_time)/CLOCKS_PER_SEC;
 
 	clpState* best = de->get_best_state()? static_cast<clpState*>(de->get_best_state()->clone()) : NULL;
 	if(best){
@@ -639,6 +652,7 @@ int main(int argc, char** argv){
 	args::Flag _eliminate_only(parser, "eliminate_only", "Ablation: instead of the reduction of the volume, only eliminate ULDs by inserting their boxes into the others", {"eliminate_only"});
 	args::Flag _no_eliminate(parser, "no_eliminate", "Ablation: no reduction of the volume (nor elimination of ULDs)", {"no_eliminate"});
 	args::ValueFlag<string> _output(parser, "string", "Write the solution to this file (one line per box: ULD, ULD type, substructure, item (line of the instance file, from 0), x, y, z, length, width, height)", {'o', "output"});
+	args::Flag _trace(parser, "trace", "Print the time, the volume of the ULDs and the unloaded volume (m3) of the best solution each time it changes", {"trace"});
 	args::Flag _verbose(parser, "verbose", "Print the loaded ULDs", {'v', "verbose"});
 	args::Positional<std::string> _file(parser, "instance", "Instance file (format of Paquay et al.)");
 
@@ -741,17 +755,22 @@ int main(int argc, char** argv){
 		const ULD* u = select_uld(left, &cands);
 		//no quedan ULDs disponibles en que quepan las cajas restantes
 		if(!u) break;
-		Load ld = load(*u, left, P);
-		//eleccion entre los candidatos (--theta): no se elige uno que deje el CoG fuera de rango si otro no
-		if(theta>=0 && cands.size()>1){
+		//eleccion entre los candidatos (--theta): cada candidato se carga con el tiempo de las fases
+		//de mejora y el elegido se carga de nuevo con el tiempo completo; no se elige uno que deje
+		//el CoG fuera de rango si otro no
+		bool multi = theta>=0 && cands.size()>1;
+		const Params& Pc = multi? Pi : P;
+		Load ld = load(*u, left, Pc);
+		if(multi){
 			auto score=[&](const Load& l){ return l.volume - theta*l.uld->volume; };
 			for(const ULD* c : cands){
 				if(c->type==u->type) continue;
-				Load ld2 = load(*c, left, P);
+				Load ld2 = load(*c, left, Pc);
 				if(!ld2.feasible || none(ld2.boxes) || (ld.cog_ok() && !ld2.cog_ok())) continue;
 				if((!ld.cog_ok() && ld2.cog_ok()) || score(ld2) > score(ld)){ ld=ld2; u=c; }
 			}
 		}
+		if(multi) ld = load(*u, left, P);
 		//con ULDs limitados: si quedan fuera cajas que solo caben en este ULD (entre los
 		//disponibles) o cajas prioritarias, se carga el ULD priorizando esas cajas
 		if(limited){
@@ -790,20 +809,26 @@ int main(int argc, char** argv){
 	if(remaining()>0) insert(loads, left, Pi);
 	};
 
+	auto unl_vol=[&](){ double v=0; for(size_t t=0; t<left.size(); t++) v+=(double) left[t]*clpState::types[t]->getVolume(); return v; };
+	auto uld_vol=[&](){ double v=0; for(const Load& l : loads) v+=l.uld->volume; return v; };
+	//traza de convergencia (--trace): tiempo, volumen de los ULDs y volumen sin cargar (m3) de la
+	//mejor solucion cada vez que cambia
+	auto trace=[&](){
+		if(_trace) cout << "trace " << double(clock()-begin_time)/CLOCKS_PER_SEC << " " << uld_vol()*1e-9 << " " << unl_vol()*1e-9 << endl;
+	};
 	vector<int> prio(left.size(), 0);
 	construct(prio);
+	trace();
 	//reinicios (ULDs limitados): si quedan cajas fuera, se construye de nuevo priorizando las
 	//cajas que quedaron fuera en las construcciones anteriores; se queda la mejor solucion
 	//(menos volumen sin cargar, luego menos volumen de ULDs)
-	auto unl_vol=[&](){ double v=0; for(size_t t=0; t<left.size(); t++) v+=(double) left[t]*clpState::types[t]->getVolume(); return v; };
-	auto uld_vol=[&](){ double v=0; for(const Load& l : loads) v+=l.uld->volume; return v; };
 	for(int r=0; r<restarts && limited && remaining()>0; r++){
 		for(size_t t=0; t<left.size(); t++) prio[t]=max(prio[t], left[t]);
 		vector<Load> bl=loads; vector<int> bleft=left, bav=available;
 		double bu=unl_vol(), bv=uld_vol();
 		construct(prio);
 		double u2=unl_vol(), v2=uld_vol();
-		if(u2 < bu-1e6 || (u2 <= bu+1e6 && v2 < bv)) n_restart_useful++;
+		if(u2 < bu-1e6 || (u2 <= bu+1e6 && v2 < bv)){ n_restart_useful++; trace(); }
 		else { loads=bl; left=bleft; available=bav; }
 	}
 
@@ -811,7 +836,7 @@ int main(int argc, char** argv){
 	//si se cargaron todas las cajas)
 	if(!_no_eliminate){
 		if(_eliminate_only){ if(remaining()==0) while(eliminate_uld(loads, Pi)); }
-		else while(reduce_volume(loads, Pi));
+		else while(reduce_volume(loads, Pi)) trace();
 	}
 
 	double time=double(clock()-begin_time)/double(CLOCKS_PER_SEC);
@@ -852,7 +877,7 @@ int main(int argc, char** argv){
 	cout << "stats scratch " << st_scratch << " priority " << st_priority << " ruin " << st_ruin
 		<< " useful_scratch " << su_scratch << " useful_priority " << su_priority << " useful_ruin " << su_ruin
 		<< " passes " << st_pass << " tries " << st_try << " elim " << st_elim << " new1 " << st_new1
-		<< " new2 " << st_new2 << " fail " << st_fail << " useful_restarts " << n_restart_useful << " t_insert " << tm_insert << " t_new " << tm_new << " new_loads " << st_newload << endl;
+		<< " new2 " << st_new2 << " fail " << st_fail << " useful_restarts " << n_restart_useful << " t_insert " << tm_insert << " t_new " << tm_new << " new_loads " << st_newload << " bsg_loads " << n_bsg << " t_gen " << tm_gen << " t_search " << tm_search << endl;
 
 	if(_output){
 		ofstream out(_output.Get().c_str());

@@ -43,7 +43,8 @@ ULDs. The ULDs are loaded one by one with BSG (all the free spaces anchored at t
 closest to the origin, so that the load stays grouped and can be translated to center its
 center of gravity); the next ULD type is chosen among the candidates of the rule of Hessler et al. (2025) by
 loading each one and maximizing loaded volume - theta * ULD volume (`--theta`, default 0.2316;
-negative: the rule of Hessler et al. alone). Then the boxes
+negative: the rule of Hessler et al. alone; the candidates are loaded with the time of the
+improvement phases and the chosen one again with the full time). Then the boxes
 left unloaded (limited ULDs) are inserted into the loaded ULDs; if some are still left out, the
 construction is restarted (at most `--restarts` times, default 3) loading those boxes first in
 the first ULD in which they fit, and the solution with the least unloaded volume is kept. Then
@@ -103,8 +104,8 @@ and it can be checked with an independent validator:
 
      python3 scripts/validate_uld.py <instance.csv> instances/uld.csv <solution> [--support corners|full|none]
 
-(The tables below are from the previous version of the algorithm, with the improvement phases
-at t and three stages in the insertion; they will be updated with the next campaign.)
+(The tables below are from a previous version of the algorithm; they will be updated with the
+next campaign.)
 
 Results on the 300 final instances of Paquay et al. (2018) (30 per size, 10 to 100 boxes),
 5 runs per configuration (mean ± standard deviation), all the solutions validated with
