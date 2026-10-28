@@ -1,5 +1,5 @@
-fecha: Wed Oct 28 11:24:09 AM UTC 2026
-commit: 3faa2ab0fd87782ee1c6fde05ca7fec399719438
+fecha: Wed Oct 28 03:32:22 PM UTC 2026
+commit: 99716f31e995bdad6c5bbe8ad562ef66f701cb4a
 procesos en paralelo: 14
 Architecture:                            x86_64
 CPU op-mode(s):                          32-bit, 64-bit
@@ -15,7 +15,7 @@ Thread(s) per core:                      1
 Core(s) per socket:                      8
 Socket(s):                               2
 Stepping:                                1
-CPU(s) scaling MHz:                      49%
+CPU(s) scaling MHz:                      52%
 CPU max MHz:                             3000.0000
 CPU min MHz:                             1200.0000
 BogoMIPS:                                4199.91
@@ -48,6 +48,6 @@ Vulnerability Tsa:                       Not affected
 Vulnerability Tsx async abort:           Mitigation; Clear CPU buffers; SMT disabled
 Vulnerability Vmscape:                   Mitigation; IBPB before exit to userspace
                total        used        free      shared  buff/cache   available
-Mem:              62           7          36           0          20          55
+Mem:              62           6          36           0          20          55
 Swap:              7           0           7
 g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
