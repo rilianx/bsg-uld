@@ -104,15 +104,14 @@ and it can be checked with an independent validator:
 
      python3 scripts/validate_uld.py <instance.csv> instances/uld.csv <solution> [--support corners|full|none]
 
-(The tables below are from a previous version of the algorithm; they will be updated with the
-next campaign.)
-
 Results on the 300 final instances of Paquay et al. (2018) (30 per size, 10 to 100 boxes),
 5 runs per configuration (mean ± standard deviation), all the solutions validated with
 `validate_uld.py` (`scripts/run_all.sh`, statistics with `scripts/paper_stats.py`; runs in
 `results/final/runs.tar.gz`, summary in `results/final/summary.txt`). Comparison instance by
 instance with the RGS of Hessler et al. (2025) (`hessler/`), with their objective: total volume
-of the ULDs (with one ULD of each type, first the loaded volume).
+of the ULDs (with one ULD of each type, first the loaded volume). The RGS takes 0.19-0.42 s per
+instance on an Apple M2 Pro, about 0.5-1.1 s on our machine (PassMark single thread, factor
+2.53), comparable to `-t 0.1`.
 
 * paquay: instances of Paquay et al., CoG deviation 5% of the half dimensions as in Hessler et
   al. (RGS: 18648 m3, 708 ULDs, 11.2% of the ULDs with the CoG out of range);
@@ -122,40 +121,50 @@ of the ULDs (with one ULD of each type, first the loaded volume).
 * one: adapted with one ULD of each type (RGS: 16166 m3, 729 ULDs, 24 boxes / 25.9 m3 not
   loaded).
 
-| instances | -t (per ULD) | volume (m3) | vs RGS | better / worse | ULDs | not loaded (m3) | CoG xy | CoG z | avg time |
+| instances | -t | volume (m3) | vs RGS | better / worse | ULDs | not loaded (m3) | CoG xy | CoG z | avg time |
 |---|---|---|---|---|---|---|---|---|---|
-| paquay  | 0.1 s | 17804 ± 34 | -4.5% | 160 / 74 | 720.2 | 0 | 7.2 | 0 | 3.7 s |
-| paquay  | 1 s   | 17309 ± 15 | -7.2% | 178.2 / 60.8 | 695.2 | 0 | 5 | 1 | 28.1 s |
-| adapted | 0.1 s | 16240 ± 17 | -3.6% | 151.4 / 77.6 | 680.0 | 0 | 1.2 | 1 | 4.9 s |
-| adapted | 1 s   | 15770 ± 13 | -6.4% | 168.6 / 62.2 | 639.0 | 0 | 2 | 1 | 35.3 s |
-| one     | 0.1 s | 15396 ± 10 | -4.8% | 154.6 / 41.4 | 760.6 | 12 (10.4) | 10.8 | 3 | 5.8 s |
-| one     | 1 s   | 14866 ± 6  | -8.0% | 176.4 / 27 | 709.4 | 9 (9.0) | 7.2 | 5 | 44.0 s |
+| paquay  | 0.1 s | 18106 ± 17 | -2.9% | 158 / 74.4 | 777.6 | 0 | 7.8 | 4.2 | 0.56 s |
+| paquay  | 1 s   | 17317 ± 4  | -7.1% | 182.8 / 51.8 | 732.6 | 0 | 0 | 1.4 | 3.5 s |
+| adapted | 0.1 s | 16203 ± 25 | -3.8% | 151.4 / 62.8 | 725.8 | 0 | 3 | 3 | 0.77 s |
+| adapted | 1 s   | 15461 ± 6  | -8.2% | 184 / 44.6 | 689.0 | 0 | 0 | 0 | 5.2 s |
+| one     | 0.1 s | 15773 ± 16 | -2.4% | 132.6 / 51.2 | 776.6 | 15.4 (20.0) | 17 | 11 | 0.89 s |
+| one     | 1 s   | 15207 ± 6  | -5.9% | 171 / 36 | 745.0 | 12 (17.8) | 10.6 | 8.8 | 6.1 s |
 
 Machine: two Intel Xeon E5-2620 v4 (2.1 GHz, 8 cores each), 14 runs in parallel.
 
-Lower bound on the number of ULDs (`lower_bound_uld.py`): reached in 106 of the 300 paquay
-instances with 1 s (RGS: 80).
+Volume vs RGS according to the time limit (one run; 5 runs for 0.1 and 1 s; mean time per
+instance in parentheses):
+
+| -t | paquay | adapted | one (not loaded) |
+|---|---|---|---|
+| 0.02 s | +2.4% (0.24 s) | +1.2% (0.29 s) | +1.0%, 40.9 m3 (0.34 s) |
+| 0.05 s | -1.3% (0.35 s) | -1.6% (0.46 s) | -1.4%, 18.3 m3 (0.55 s) |
+| 0.1 s | -2.9% (0.56 s) | -3.8% (0.77 s) | -2.4%, 20.0 m3 (0.89 s) |
+| 0.2 s | -5.9% (0.94 s) | -5.9% (1.32 s) | -3.5%, 10.7 m3 (1.50 s) |
+| 0.5 s | -6.1% (1.92 s) | -6.7% (2.77 s) | -4.4%, 15.5 m3 (3.26 s) |
+| 1 s | -7.1% (3.51 s) | -8.2% (5.15 s) | -5.9%, 17.8 m3 (6.13 s) |
+| 2 s | -8.1% (6.64 s) | -8.7% (9.62 s) | -6.9%, 19.6 m3 (11.5 s) |
 
 Ablation (0.1 s per ULD, one run; volume of the ULDs vs RGS and ULDs with the CoG out of range
 in x or y; with one ULD of each type also the volume not loaded):
 
 | variant | paquay | adapted | one |
 |---|---|---|---|
-| complete algorithm (mean of 5 runs) | -4.5% / 7.2 | -3.6% / 1.2 | -4.8% / 10.8, 10.4 m3 |
-| no CoG penalty (`--cog_penalty 0`) | -6.4% / 446 | -3.0% / 285 | -3.3% / 300, 8.8 m3 |
-| no translation (`--no_translate`) | -1.5% / 171 | -1.6% / 119 | -3.9% / 178, 15.2 m3 |
-| CoG in the block evaluation (`--cog_greedy 0.5`) | -3.4% / 8 | -3.7% / 4 | -5.2% / 6, 9.7 m3 |
-| spaces at the nearest corner (`--corner_anchor`) | -4.9% / 7 | -2.3% / 3 | -4.3% / 6, 9.8 m3 |
-| no substructure (`--no_substructure`) | - | -3.2% / 7 | -3.9% / 13, 14.7 m3 |
-| rule of Hessler et al. (`--theta -1`) | -3.5% / 6 | -3.4% / 4 | -3.7% / 11, 11.9 m3 |
-| no restarts (`--restarts 0`) | - | - | -4.9% / 12, 19.8 m3 |
-| insert without reload from scratch (`--no_scratch`) | -3.7% / 9 | -3.0% / 3 | -4.0% / 15, 13.8 m3 |
-| insert without priority reload (`--no_priority`) | -3.2% / 8 | -3.0% / 0 | -4.3% / 13, 11.1 m3 |
-| insert without ruin and recreate (`--no_ruin`) | -4.0% / 8 | -3.0% / 1 | -4.1% / 13, 10.6 m3 |
-| reduction with one new ULD (`--reduce_new 1`) | -4.0% / 6 | -3.0% / 0 | -4.4% / 11, 10.3 m3 |
-| only elimination of ULDs (`--eliminate_only`) | -1.3% / 9 | -0.4% / 3 | -3.7% / 13, 10.3 m3 |
-| no reduction (`--no_eliminate`) | +0.6% / 10 | +0.8% / 3 | -1.7% / 17, 10.3 m3 |
-| basic BSG (all of the above off) | +13.7% / 90 | +18.5% / 60 | +10.1% / 74, 26.9 m3 |
+| complete algorithm (mean of 5 runs) | -2.9% / 7.8 | -3.8% / 3 | -2.4% / 17, 20.0 m3 |
+| no CoG penalty (`--cog_penalty 0`) | -6.0% / 460 | -3.0% / 281 | -1.0% / 326, 13.5 m3 |
+| no translation (`--no_translate`) | -1.4% / 183 | -2.4% / 117 | -1.9% / 216, 36.7 m3 |
+| CoG in the block evaluation (`--cog_greedy 0.5`) | -3.6% / 10 | -3.8% / 2 | -3.5% / 9, 21.6 m3 |
+| spaces at the nearest corner (`--corner_anchor`) | -4.2% / 4 | -3.4% / 2 | -2.6% / 4, 26.1 m3 |
+| no substructure (`--no_substructure`) | - | -2.2% / 7 | -1.6% / 23, 17.5 m3 |
+| rule of Hessler et al. (`--theta -1`) | -2.5% / 7 | -3.6% / 3 | -2.7% / 18, 20.3 m3 |
+| no restarts (`--restarts 0`) | - | - | -2.4% / 15, 39.6 m3 |
+| insert also with reload from scratch (`--scratch`) | -2.3% / 10 | -2.9% / 3 | -2.4% / 15, 17.2 m3 |
+| insert also with priority reload (`--priority`) | -2.0% / 12 | -2.0% / 2 | -2.6% / 14, 17.4 m3 |
+| no insert (`--no_ruin`) | +0.2% / 10 | +0.2% / 4 | -1.2% / 21, 37.1 m3 |
+| reduction with one new ULD (`--reduce_new 1`) | -1.6% / 8 | -2.5% / 2 | -2.2% / 16, 20.0 m3 |
+| only elimination of ULDs (`--eliminate_only`) | +0.3% / 10 | +0.4% / 4 | -1.9% / 18, 19.3 m3 |
+| no reduction (`--no_eliminate`) | +0.8% / 10 | +0.6% / 2 | -1.0% / 20, 20.0 m3 |
+| basic BSG (all of the above off) | +13.9% / 90 | +18.4% / 61 | +10.1% / 72, 43.0 m3 |
 
 ```
 ./BSG_ULD {OPTIONS} [instance]
