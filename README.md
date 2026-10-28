@@ -44,10 +44,12 @@ closest to the origin, so that the load stays grouped and can be translated to c
 center of gravity); the next ULD type is chosen among the candidates of the rule of Hessler et al. (2025) by
 loading each one and maximizing loaded volume - theta * ULD volume (`--theta`, default 0.2316;
 negative: the rule of Hessler et al. alone; the candidates are loaded with the time of the
-improvement phases and the chosen one again with the full time). Then the boxes
+improvement phases and the chosen one again with the full time). With limited ULDs, the boxes
+that fit in no other available ULD type, and the prioritized boxes of the restarts, count as
+1 + `--must_w` (default 10) times their volume in BSG. Then the boxes
 left unloaded (limited ULDs) are inserted into the loaded ULDs; if some are still left out, the
-construction is restarted (at most `--restarts` times, default 3) loading those boxes first in
-the first ULD in which they fit, and the solution with the least unloaded volume is kept. Then
+construction is restarted (at most `--restarts` times, default 3) giving priority to those
+boxes in the first ULD in which they fit, and the solution with the least unloaded volume is kept. Then
 the total volume of the
 ULDs (the objective of Paquay et al. and Hessler et al.) is reduced: a ULD is removed, its
 boxes are inserted into the other ULDs and the remaining ones are loaded into 1 or 2 new ULDs
@@ -177,6 +179,7 @@ in x or y; with one ULD of each type also the volume not loaded):
       --support=[string]                corners, full or none. Default: corners
       --max_bl=[int]                    Maximum number of blocks. Default: 500
       --theta=[double]                  Choice of the ULD type (negative: rule of Hessler et al.). Default: 0.2316
+      --must_w=[double]                 Limited ULDs: extra weight of the boxes that must be loaded (0: none). Default: 10
       --no_eliminate                    Do not reduce the volume of the ULDs
       --scratch, --priority, --no_ruin, --corner_anchor, --no_translate,
       --no_substructure                 Ablation (see above)

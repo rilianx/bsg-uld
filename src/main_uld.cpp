@@ -121,6 +121,9 @@ static bool regroup=true;
 static double theta=0.2316;
 //reinicios de la construccion con ULDs limitados (--restarts)
 static int restarts=3, n_restart_useful=0;
+//ULDs limitados: peso adicional de las cajas que deben cargarse en el ULD (en el valor de las
+//cargas y en la evaluacion de los bloques); 0: sin prioridad
+static double must_w=10.0;
 
 static int uld_index(const ULD& u){
 	for(size_t i=0; i<ulds.size(); i++) if(ulds[i].type==u.type) return i;
@@ -267,6 +270,11 @@ static Load load_bsg(const ULD& u, const vector<int>& left, const Params& P,
 	//la busqueda termina si se cargan todas las cajas con el CoG en rango (no se puede mejorar)
 	double vleft=0;
 	for(size_t t=0; t<left.size(); t++) vleft += (double) left[t]*clpState::types[t]->getVolume();
+	if(clpState::must_w>0.0){
+		clpState::must_init=left;
+		for(size_t t=0; t<left.size(); t++)
+			vleft += clpState::must_w*(double) min(left[t], clpState::must[t])*clpState::types[t]->getVolume();
+	}
 	de->set_target(vleft/((double) u.L*u.W*u.H));
 
 	//el tiempo limite es para la busqueda (sin la generacion de bloques)
@@ -647,6 +655,7 @@ int main(int argc, char** argv){
 	args::Flag _no_ruin(parser, "no_ruin", "Ablation: insertion of boxes without ruin and recreate", {"no_ruin"});
 	args::ValueFlag<double> _theta(parser, "double", "Select the next ULD type among the candidates (rule of Hessler et al.) by loading each one and maximizing loaded volume - theta * ULD volume (negative: rule of Hessler et al. alone). Default: 0.2316", {"theta"});
 	args::ValueFlag<double> _improve_time(parser, "double", "Time limit of BSG in the improvement phases (insertion and reduction), relative to -t. Default: 0.1", {"improve_time"});
+	args::ValueFlag<double> _must_w(parser, "double", "Limited ULDs: extra weight, in the value of the loadings and in the evaluation of the blocks, of the boxes that fit in no other available ULD and of the prioritized boxes of the restarts (0: no priority). Default: 10", {"must_w"});
 	args::ValueFlag<int> _restarts(parser, "int", "Limited ULDs: maximum number of restarts of the construction prioritizing the boxes left unloaded. Default: 3", {"restarts"});
 	args::ValueFlag<int> _reduce_new(parser, "int", "Reduction of the volume: maximum number of new ULDs for the boxes that are not inserted into the other ULDs (1 or 2). Default: 2", {"reduce_new"});
 	args::Flag _eliminate_only(parser, "eliminate_only", "Ablation: instead of the reduction of the volume, only eliminate ULDs by inserting their boxes into the others", {"eliminate_only"});
@@ -719,6 +728,7 @@ int main(int argc, char** argv){
 	if(_reduce_new) reduce_new=_reduce_new.Get();
 	if(_theta) theta=_theta.Get();
 	if(_restarts) restarts=_restarts.Get();
+	if(_must_w) must_w=_must_w.Get();
 	origin_only = !_corner_anchor;
 	Space::origin_anchor = origin_only;
 	clpState::translate_cog = !_no_translate;
@@ -770,32 +780,15 @@ int main(int argc, char** argv){
 				if((!ld.cog_ok() && ld2.cog_ok()) || score(ld2) > score(ld)){ ld=ld2; u=c; }
 			}
 		}
-		if(multi) ld = load(*u, left, P);
-		//con ULDs limitados: si quedan fuera cajas que solo caben en este ULD (entre los
-		//disponibles) o cajas prioritarias, se carga el ULD priorizando esas cajas
-		if(limited){
-			vector<int> must=only_in(left, *u);
-			for(size_t t=0; t<must.size(); t++)
-				if(fits(*clpState::types[t], *u)) must[t]=max(must[t], min(prio[t], left[t]));
-			double must_vol=0, loaded_must=0;
-			for(size_t t=0; t<must.size(); t++){
-				must_vol += (double) must[t]*clpState::types[t]->getVolume();
-				loaded_must += (double) min(must[t], ld.boxes[t])*clpState::types[t]->getVolume();
-			}
-			if(loaded_must < must_vol){
-				//(sin centrar la carga, que se completa a continuacion)
-				Load ld2 = load_bsg(*u, must, P, NULL, false);
-				double loaded2=0;
-				for(size_t t=0; t<must.size(); t++) loaded2 += (double) ld2.boxes[t]*clpState::types[t]->getVolume();
-				if(loaded2 > loaded_must){
-					//se completa el ULD con las otras cajas
-					vector<int> rest=left;
-					for(size_t t=0; t<rest.size(); t++) rest[t]-=ld2.boxes[t];
-					Load ld3 = load_more(ld2, rest, P);
-					ld = (ld3.feasible && ld3.volume >= ld2.volume)? ld3 : ld2;
-				}
-			}
-		}
+		//con ULDs limitados, las cajas que solo caben en este ULD (entre los disponibles) y las
+		//cajas prioritarias de los reinicios valen (1+must_w) veces su volumen en BSG
+		if(limited && must_w>0.0){
+			clpState::must=only_in(left, *u);
+			for(size_t t=0; t<left.size(); t++)
+				if(fits(*clpState::types[t], *u)) clpState::must[t]=max(clpState::must[t], min(prio[t], left[t]));
+			if(!none(clpState::must)){ clpState::must_w=must_w; ld = load(*u, left, P); clpState::must_w=0.0; }
+			else if(multi) ld = load(*u, left, P);
+		}else if(multi) ld = load(*u, left, P);
 		int n=0; for(int x : ld.boxes) n+=x;
 		if(n==0){
 			cerr << "ERROR: no box was loaded in ULD " << u->type << endl;
