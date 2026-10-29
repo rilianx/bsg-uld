@@ -3,7 +3,7 @@
 Code, instances, solutions and scripts of the paper
 
 > I. Araya. *A beam search for the air cargo palletization problem with weight distribution
-> constraints.* Submitted to the European Journal of Operational Research.
+> constraints.* Submitted to Computers & Operations Research.
 
 `BSG_ULD` loads a set of heterogeneous boxes into unit load devices (ULDs) of minimum total
 volume. The ULDs have bevelled corners, a weight capacity, a floor edge for the cargo net locks
